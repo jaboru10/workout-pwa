@@ -1,0 +1,32 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { color-scheme: dark; }
+
+html, body, #root { height: 100%; }
+
+body {
+  margin: 0;
+  background: #0a0a0b;
+  color: #f2f2ef;
+  font-family: Inter, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  /* safe areas para iPhone con notch en modo standalone */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+/* Scrollbar discreta */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: #2a2a2e; border-radius: 4px; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+
+@keyframes ignite {
+  0%   { box-shadow: 0 0 0 0 rgba(215,255,62,0.0); }
+  40%  { box-shadow: 0 0 0 3px rgba(215,255,62,0.35); }
+  100% { box-shadow: 0 0 0 0 rgba(215,255,62,0.0); }
+}
+.animate-ignite { animation: ignite 1.2s ease-out; }

@@ -20,11 +20,6 @@ export function AuthProvider({ children }) {
     persist(data);
   }, [persist]);
 
-  const register = useCallback(async (username, password) => {
-    const data = await api.register(username, password);
-    persist(data);
-  }, [persist]);
-
   const logout = useCallback(() => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
@@ -32,7 +27,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, login, register, logout }}>
+    <AuthContext.Provider value={{ user, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

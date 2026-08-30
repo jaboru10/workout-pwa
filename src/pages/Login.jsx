@@ -4,9 +4,8 @@ import { useAuth } from '../context/AuthContext';
 import { Button, Input } from '../components/ui';
 
 export default function Login() {
-  const { login, register, user } = useAuth();
+  const { login, user } = useAuth();
   const navigate = useNavigate();
-  const [mode, setMode] = useState('login');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -19,8 +18,7 @@ export default function Login() {
     setError('');
     setLoading(true);
     try {
-      if (mode === 'login') await login(username, password);
-      else await register(username, password);
+      await login(username, password);
       navigate('/');
     } catch (err) {
       setError(err.message || 'Algo ha fallado');
@@ -55,22 +53,15 @@ export default function Login() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           placeholder="••••••••"
-          autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+          autoComplete="current-password"
         />
 
         {error && <p className="text-blood text-sm font-body">{error}</p>}
 
         <Button type="submit" disabled={loading} className="w-full">
-          {loading ? 'Un momento…' : mode === 'login' ? 'Entrar' : 'Crear cuenta'}
+          {loading ? 'Un momento…' : 'Entrar'}
         </Button>
       </form>
-
-      <button
-        onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError(''); }}
-        className="text-muted text-sm font-body mt-6 text-center hover:text-chalk transition-colors"
-      >
-        {mode === 'login' ? '¿Primera vez? Crea tu cuenta' : '¿Ya tienes cuenta? Entra'}
-      </button>
     </div>
   );
 }

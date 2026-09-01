@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { Card, EmptyState } from '../components/ui';
+import { formatDate, isWithinEditWindow } from '../utils/dates';
 
 export default function History() {
+  const navigate = useNavigate();
   const [sessions, setSessions] = useState([]);
   const [exercises, setExercises] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -40,7 +43,7 @@ export default function History() {
                    onClick={() => setOpen(open === s.id ? null : s.id)}>
                 <div>
                   <p className="font-display text-xl uppercase tracking-wide">
-                    {new Date(s.date).toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' })}
+                    {formatDate(s.date)}
                   </p>
                   <p className="text-muted text-sm font-body">
                     {s.exercises?.length || 0} ejercicios
@@ -48,6 +51,15 @@ export default function History() {
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
+                  {/* Solo las sesiones dentro de la ventana de 7 días son editables (IL-003) */}
+                  {isWithinEditWindow(s.date) && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); navigate(`/log/${s.id}`); }}
+                      className="text-volt/80 hover:text-volt text-sm font-body"
+                    >
+                      Editar
+                    </button>
+                  )}
                   <button onClick={(e) => del(s.id, e)} className="text-blood/60 hover:text-blood text-sm font-body">
                     Borrar
                   </button>

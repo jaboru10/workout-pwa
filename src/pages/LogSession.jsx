@@ -1,34 +1,91 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api/client';
 import { Button, Card, Input, EmptyState, RecordBadge } from '../components/ui';
+import { EDIT_WINDOW_DAYS, formatDate, isWithinEditWindow, todayLocal } from '../utils/dates';
 
 export default function LogSession() {
   const navigate = useNavigate();
+  // Con :sessionId en la ruta la pantalla trabaja en modo edición (PUT);
+  // sin él, en modo creación (POST) como siempre.
+  const { sessionId } = useParams();
+  const editing = Boolean(sessionId);
+
   const [days, setDays] = useState([]);
   const [exercises, setExercises] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
 
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(todayLocal());
   const [dayId, setDayId] = useState('');
   const [badDay, setBadDay] = useState(false);
   const [notes, setNotes] = useState('');
   const [rows, setRows] = useState([]); // ejercicios de la sesión
 
   const [saving, setSaving] = useState(false);
-  const [result, setResult] = useState(null); // { newRecords }
+  const [result, setResult] = useState(null); // { session, newRecords }
 
   useEffect(() => {
-    Promise.all([api.listDays(), api.listExercises()])
-      .then(([d, e]) => { setDays(d); setExercises(e); })
-      .catch(() => {})
+    const base = [api.listDays(), api.listExercises()];
+    const all = editing ? [...base, api.getSession(sessionId)] : base;
+
+    Promise.all(all)
+      .then(([d, e, session]) => {
+        setDays(d);
+        setExercises(e);
+        if (!session) return;
+        if (!isWithinEditWindow(session.date)) {
+          setLoadError(`Esta sesión tiene más de ${EDIT_WINDOW_DAYS} días y ya no se puede editar.`);
+          return;
+        }
+        prefill(session);
+      })
+      .catch((err) => setLoadError(err.message || 'No se ha podido cargar la sesión'))
       .finally(() => setLoading(false));
-  }, []);
+  }, [sessionId, editing]);
+
+  // Vuelca una sesión guardada en el formulario (los inputs son controlados
+  // con strings, de ahí la conversión de peso/reps).
+  function prefill(session) {
+    setDate(session.date || todayLocal());
+    setDayId(session.trainingDayId || '');
+    setBadDay(Boolean(session.badDay));
+    setNotes(session.generalNotes || '');
+    setRows(
+      [...(session.exercises || [])]
+        .sort((a, b) => a.order - b.order)
+        .map((se, i) => ({
+          exerciseId: se.exerciseId,
+          order: i + 1,
+          movedFromDayId: se.movedFromDayId || null,
+          sets: [...(se.sets || [])]
+            .sort((a, b) => a.setNumber - b.setNumber)
+            .map((s, k) => ({
+              setNumber: k + 1,
+              weight: s.weight == null ? '' : String(s.weight),
+              reps: s.reps == null ? '' : String(s.reps),
+              unit: s.unit || 'kg',
+            })),
+        }))
+    );
+  }
 
   const exMap = Object.fromEntries(exercises.map((e) => [e.id, e]));
 
+  // Un ejercicio borrado (soft delete) no viene en la lista activa. Si la
+  // sesión editada lo usa, hay que ofrecerlo igualmente en el desplegable o
+  // el select cambiaría el ejercicio de la fila sin avisar al guardar.
+  function optionsFor(exerciseId) {
+    if (!exerciseId || exMap[exerciseId]) return exercises;
+    return [...exercises, { id: exerciseId, name: 'Ejercicio eliminado' }];
+  }
+
   // Al elegir un día de plantilla, precargar sus ejercicios
   function loadDay(id) {
+    // Cargar la plantilla pisa lo que haya escrito: confirmar antes de perderlo.
+    if (rows.length > 0 && !confirm('Se reemplazarán los ejercicios actuales por los de la plantilla. ¿Seguir?')) {
+      return;
+    }
     setDayId(id);
     const day = days.find((d) => d.id === id);
     if (!day) { setRows([]); return; }
@@ -106,13 +163,19 @@ export default function LogSession() {
           })),
       })).filter((r) => r.sets.length > 0);
 
-      const res = await api.createSession({
+      const payload = {
         date,
         trainingDayId: dayId || null,
         badDay,
         generalNotes: notes,
         exercises: payloadExercises,
-      });
+      };
+
+      // Ambos endpoints devuelven { session, newRecords }, así que la pantalla
+      // de resultado sirve igual para crear y para editar.
+      const res = editing
+        ? await api.updateSession(sessionId, payload)
+        : await api.createSession(payload);
 
       setResult(res);
     } catch (err) {
@@ -124,13 +187,30 @@ export default function LogSession() {
 
   if (loading) return <div className="px-5 pt-8"><p className="text-muted font-body">Cargando…</p></div>;
 
+  if (loadError) {
+    return (
+      <div className="px-5 pt-8">
+        <h1 className="font-display text-4xl font-bold uppercase tracking-tight mb-5">Editar</h1>
+        <EmptyState
+          title="No editable"
+          hint={loadError}
+          action={<Button onClick={() => navigate('/history')}>Volver al historial</Button>}
+        />
+      </div>
+    );
+  }
+
   // Pantalla de resultado con récords
   if (result) {
     const recs = result.newRecords || [];
     return (
       <div className="px-5 pt-8">
-        <h1 className="font-display text-4xl font-bold uppercase tracking-tight mb-2">Guardado</h1>
-        <p className="text-muted font-body mb-6">Sesión del {new Date(date).toLocaleDateString('es-ES')}</p>
+        <h1 className="font-display text-4xl font-bold uppercase tracking-tight mb-2">
+          {editing ? 'Actualizado' : 'Guardado'}
+        </h1>
+        <p className="text-muted font-body mb-6">
+          Sesión del {formatDate(date, { day: 'numeric', month: 'long', year: 'numeric' })}
+        </p>
 
         {recs.length > 0 ? (
           <Card className="p-5 mb-6 border-volt/40">
@@ -159,9 +239,15 @@ export default function LogSession() {
 
         <div className="flex gap-2">
           <Button className="flex-1" onClick={() => navigate('/')}>Inicio</Button>
-          <Button variant="ghost" className="flex-1" onClick={() => { setResult(null); setRows([]); setDayId(''); }}>
-            Otra sesión
-          </Button>
+          {editing ? (
+            <Button variant="ghost" className="flex-1" onClick={() => navigate('/history')}>
+              Historial
+            </Button>
+          ) : (
+            <Button variant="ghost" className="flex-1" onClick={() => { setResult(null); setRows([]); setDayId(''); }}>
+              Otra sesión
+            </Button>
+          )}
         </div>
       </div>
     );
@@ -169,7 +255,9 @@ export default function LogSession() {
 
   return (
     <div className="px-5 pt-8">
-      <h1 className="font-display text-4xl font-bold uppercase tracking-tight mb-5">Registrar</h1>
+      <h1 className="font-display text-4xl font-bold uppercase tracking-tight mb-5">
+        {editing ? 'Editar sesión' : 'Registrar'}
+      </h1>
 
       <Card className="p-4 mb-4 space-y-3">
         <Input label="Fecha" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
@@ -202,7 +290,9 @@ export default function LogSession() {
                     onChange={(e) => updateRow(ri, { exerciseId: e.target.value })}
                     className="flex-1 bg-panel2 border border-line rounded-lg px-2 py-2 text-chalk font-body text-sm focus:outline-none focus:border-volt/60"
                   >
-                    {exercises.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
+                    {optionsFor(row.exerciseId).map((e) => (
+                      <option key={e.id} value={e.id}>{e.name}</option>
+                    ))}
                   </select>
                   <button onClick={() => removeRow(ri)} className="text-blood/70 hover:text-blood px-1">×</button>
                 </div>
@@ -254,11 +344,18 @@ export default function LogSession() {
           />
 
           <Button
-            className="w-full mt-4 mb-4" onClick={save}
+            className="w-full mt-4" onClick={save}
             disabled={saving || rows.length === 0}
           >
-            {saving ? 'Guardando…' : 'Guardar sesión'}
+            {saving ? 'Guardando…' : editing ? 'Guardar cambios' : 'Guardar sesión'}
           </Button>
+
+          {editing && (
+            <Button variant="ghost" className="w-full mt-2 mb-4" onClick={() => navigate('/history')} disabled={saving}>
+              Cancelar
+            </Button>
+          )}
+          {!editing && <div className="mb-4" />}
         </>
       )}
     </div>

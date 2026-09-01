@@ -34,6 +34,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="/" element={<Home />} />
             <Route path="/days" element={<Days />} />
             <Route path="/log" element={<LogSession />} />
+            {/* Misma pantalla en modo edición (IL-010) */}
+            <Route path="/log/:sessionId" element={<LogSession />} />
             <Route path="/history" element={<History />} />
             <Route path="/records" element={<Records />} />
           </Route>

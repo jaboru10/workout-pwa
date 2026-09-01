@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api/client';
 import { Button, Card, Input, EmptyState, RecordBadge } from '../components/ui';
@@ -25,6 +25,11 @@ export default function LogSession() {
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState(null); // { session, newRecords }
 
+  // Autoguardado (solo en modo edición): 'idle' | 'dirty' | 'saving' | 'saved' | 'error'
+  const [autoStatus, setAutoStatus] = useState('idle');
+  const [hydrated, setHydrated] = useState(false); // true cuando el form ya tiene los datos de la sesión
+  const savedSigRef = useRef(null);                // firma de lo último persistido, para no guardar sin cambios
+
   useEffect(() => {
     const base = [api.listDays(), api.listExercises()];
     const all = editing ? [...base, api.getSession(sessionId)] : base;
@@ -39,10 +44,47 @@ export default function LogSession() {
           return;
         }
         prefill(session);
+        setHydrated(true); // a partir de aquí, cualquier cambio real dispara autoguardado
       })
       .catch((err) => setLoadError(err.message || 'No se ha podido cargar la sesión'))
       .finally(() => setLoading(false));
   }, [sessionId, editing]);
+
+  // Firma del contenido editable: si no cambia, no hay nada que guardar.
+  const contentSig = JSON.stringify({ date, dayId, badDay, notes, rows });
+
+  // Autoguardado con debounce. No se dispara al añadir un ejercicio o serie
+  // vacíos (buildPayload los descarta por no tener series completas), solo
+  // cuando modificas datos reales. El guardado es SILENCIOSO: mantiene la
+  // caché de récords consistente pero no muestra la pantalla de récords;
+  // esa sigue siendo exclusiva del botón "Guardar cambios".
+  useEffect(() => {
+    if (!editing || !hydrated || result) return;
+
+    // Primera pasada tras cargar: fijamos la firma base y no guardamos nada.
+    if (savedSigRef.current === null) {
+      savedSigRef.current = contentSig;
+      return;
+    }
+    if (contentSig === savedSigRef.current) return; // sin cambios reales
+
+    const payload = buildPayload();
+    if (payload.exercises.length === 0) return; // nada válido que persistir todavía
+
+    setAutoStatus('dirty');
+    const timer = setTimeout(async () => {
+      setAutoStatus('saving');
+      try {
+        await api.updateSession(sessionId, payload); // ignoramos newRecords a propósito
+        savedSigRef.current = contentSig;
+        setAutoStatus('saved');
+      } catch {
+        setAutoStatus('error');
+      }
+    }, 1500);
+
+    return () => clearTimeout(timer);
+  }, [contentSig, editing, hydrated, result, sessionId]);
 
   // Vuelca una sesión guardada en el formulario (los inputs son controlados
   // con strings, de ahí la conversión de peso/reps).
@@ -143,33 +185,38 @@ export default function LogSession() {
     setRows(next);
   }
 
+  // Construye el payload de la sesión calculando precedingExerciseIds (contexto
+  // de fatiga) y descartando series/ejercicios sin datos completos.
+  function buildPayload() {
+    const payloadExercises = rows.map((r, i) => ({
+      exerciseId: r.exerciseId,
+      order: i + 1,
+      movedFromDayId: r.movedFromDayId || null,
+      precedingExerciseIds: rows.slice(0, i).map((p) => p.exerciseId),
+      sets: r.sets
+        .filter((s) => s.weight !== '' && s.reps !== '')
+        .map((s) => ({
+          setNumber: s.setNumber,
+          weight: Number(s.weight),
+          reps: Number(s.reps),
+          unit: s.unit || 'kg',
+        })),
+    })).filter((r) => r.sets.length > 0);
+
+    return {
+      date,
+      trainingDayId: dayId || null,
+      badDay,
+      generalNotes: notes,
+      exercises: payloadExercises,
+    };
+  }
+
   async function save() {
     setSaving(true);
     setResult(null);
     try {
-      // Construir el payload calculando precedingExerciseIds (contexto de fatiga)
-      const payloadExercises = rows.map((r, i) => ({
-        exerciseId: r.exerciseId,
-        order: i + 1,
-        movedFromDayId: r.movedFromDayId || null,
-        precedingExerciseIds: rows.slice(0, i).map((p) => p.exerciseId),
-        sets: r.sets
-          .filter((s) => s.weight !== '' && s.reps !== '')
-          .map((s) => ({
-            setNumber: s.setNumber,
-            weight: Number(s.weight),
-            reps: Number(s.reps),
-            unit: s.unit || 'kg',
-          })),
-      })).filter((r) => r.sets.length > 0);
-
-      const payload = {
-        date,
-        trainingDayId: dayId || null,
-        badDay,
-        generalNotes: notes,
-        exercises: payloadExercises,
-      };
+      const payload = buildPayload();
 
       // Ambos endpoints devuelven { session, newRecords }, así que la pantalla
       // de resultado sirve igual para crear y para editar.
@@ -177,6 +224,10 @@ export default function LogSession() {
         ? await api.updateSession(sessionId, payload)
         : await api.createSession(payload);
 
+      // El guardado manual deja la firma al día para que el autoguardado no
+      // vuelva a disparar por lo mismo que se acaba de persistir.
+      savedSigRef.current = contentSig;
+      setAutoStatus('saved');
       setResult(res);
     } catch (err) {
       alert('Error al guardar: ' + err.message);
@@ -255,9 +306,12 @@ export default function LogSession() {
 
   return (
     <div className="px-5 pt-8">
-      <h1 className="font-display text-4xl font-bold uppercase tracking-tight mb-5">
-        {editing ? 'Editar sesión' : 'Registrar'}
-      </h1>
+      <div className="flex items-baseline justify-between mb-5">
+        <h1 className="font-display text-4xl font-bold uppercase tracking-tight">
+          {editing ? 'Editar sesión' : 'Registrar'}
+        </h1>
+        {editing && <AutoSaveStatus status={autoStatus} />}
+      </div>
 
       <Card className="p-4 mb-4 space-y-3">
         <Input label="Fecha" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
@@ -347,19 +401,38 @@ export default function LogSession() {
             className="w-full mt-4" onClick={save}
             disabled={saving || rows.length === 0}
           >
-            {saving ? 'Guardando…' : editing ? 'Guardar cambios' : 'Guardar sesión'}
+            {saving ? 'Guardando…' : editing ? 'Guardar y ver récords' : 'Guardar sesión'}
           </Button>
 
           {editing && (
-            <Button variant="ghost" className="w-full mt-2 mb-4" onClick={() => navigate('/history')} disabled={saving}>
-              Cancelar
-            </Button>
+            <>
+              <Button variant="ghost" className="w-full mt-2 mb-4" onClick={() => navigate('/history')} disabled={saving}>
+                Volver al historial
+              </Button>
+              <p className="text-muted text-xs font-body text-center mb-4 -mt-2">
+                Los cambios se guardan solos. Pulsa arriba solo si quieres ver los récords.
+              </p>
+            </>
           )}
           {!editing && <div className="mb-4" />}
         </>
       )}
     </div>
   );
+}
+
+// Indicador discreto del autoguardado en modo edición.
+function AutoSaveStatus({ status }) {
+  const map = {
+    idle: { text: '', cls: '' },
+    dirty: { text: 'Sin guardar…', cls: 'text-muted' },
+    saving: { text: 'Guardando…', cls: 'text-muted' },
+    saved: { text: 'Guardado ✓', cls: 'text-volt/80' },
+    error: { text: 'Error al guardar', cls: 'text-blood' },
+  };
+  const { text, cls } = map[status] || map.idle;
+  if (!text) return null;
+  return <span className={`font-body text-xs ${cls}`}>{text}</span>;
 }
 
 function recordLabel(type) {

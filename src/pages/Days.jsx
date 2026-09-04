@@ -3,13 +3,22 @@ import { api } from '../api/client';
 import { Button, Input, Card, Panel, EmptyState } from '../components/ui';
 
 export default function Days() {
-  const [tab, setTab] = useState('days'); // 'days' | 'exercises'
+  const [tab, setTab] = useState('routines'); // 'routines' | 'days' | 'exercises'
+  const [routines, setRoutines] = useState([]);
+  const [active, setActive] = useState(null);
   const [days, setDays] = useState([]);
   const [exercises, setExercises] = useState([]);
   const [loading, setLoading] = useState(true);
 
   async function reload() {
-    const [d, e] = await Promise.all([api.listDays(), api.listExercises()]);
+    const [r, a, d, e] = await Promise.all([
+      api.listRoutines(),
+      api.activeRoutine(),   // null si no hay rutina activa
+      api.listDays(),        // días de la rutina activa
+      api.listExercises(),
+    ]);
+    setRoutines(r);
+    setActive(a);
     setDays(d);
     setExercises(e);
   }
@@ -23,32 +32,174 @@ export default function Days() {
       <h1 className="font-display text-4xl font-bold uppercase tracking-tight mb-5">Plantilla</h1>
 
       <div className="flex gap-2 mb-6">
-        <button
-          onClick={() => setTab('days')}
-          className={`flex-1 py-2 rounded-lg font-body text-sm font-semibold transition-colors ${
-            tab === 'days' ? 'bg-volt text-ink' : 'bg-panel2 text-muted'
-          }`}
-        >
-          Días
-        </button>
-        <button
-          onClick={() => setTab('exercises')}
-          className={`flex-1 py-2 rounded-lg font-body text-sm font-semibold transition-colors ${
-            tab === 'exercises' ? 'bg-volt text-ink' : 'bg-panel2 text-muted'
-          }`}
-        >
-          Ejercicios
-        </button>
+        {[
+          ['routines', 'Rutinas'],
+          ['days', 'Días'],
+          ['exercises', 'Ejercicios'],
+        ].map(([key, label]) => (
+          <button
+            key={key}
+            onClick={() => setTab(key)}
+            className={`flex-1 py-2 rounded-lg font-body text-sm font-semibold transition-colors ${
+              tab === key ? 'bg-volt text-ink' : 'bg-panel2 text-muted'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
       {loading ? (
         <p className="text-muted font-body">Cargando…</p>
+      ) : tab === 'routines' ? (
+        <RoutinesTab routines={routines} active={active} onChange={reload} />
       ) : tab === 'days' ? (
-        <DaysTab days={days} exercises={exercises} onChange={reload} />
+        <DaysTab days={days} exercises={exercises} active={active} onChange={reload} />
       ) : (
         <ExercisesTab exercises={exercises} onChange={reload} />
       )}
     </div>
+  );
+}
+
+/* ---------- Rutinas (IL-004) ---------- */
+const CATEGORIES = ['Fuerza', 'Hipertrofia', 'Principiante', 'Híbrido', 'Otra'];
+
+function RoutinesTab({ routines, active, onChange }) {
+  const [name, setName] = useState('');
+  const [category, setCategory] = useState('Hipertrofia');
+  const [saving, setSaving] = useState(false);
+  const [showPresets, setShowPresets] = useState(false);
+
+  async function create() {
+    if (!name.trim()) return;
+    setSaving(true);
+    try {
+      await api.createRoutine({ name: name.trim(), category });
+      setName('');
+      await onChange();
+    } finally { setSaving(false); }
+  }
+
+  async function activate(id) {
+    await api.activateRoutine(id);
+    await onChange();
+  }
+
+  async function remove(id) {
+    if (!confirm('¿Archivar esta rutina? Sus días y el historial no se borran.')) return;
+    await api.deleteRoutine(id);
+    await onChange();
+  }
+
+  return (
+    <div>
+      <Card className="p-4 mb-6 space-y-3">
+        <Input label="Nueva rutina" value={name} onChange={(e) => setName(e.target.value)}
+               placeholder="Push/Pull/Legs" />
+        <label className="block">
+          <span className="block text-xs uppercase tracking-wider text-muted mb-1.5 font-body">Categoría</span>
+          <select value={category} onChange={(e) => setCategory(e.target.value)}
+                  className="w-full bg-panel2 border border-line rounded-lg px-3 py-2.5 text-chalk font-body focus:outline-none focus:border-volt/60">
+            {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </label>
+        <Button onClick={create} disabled={saving} className="w-full">Crear desde cero</Button>
+        <Button variant="outline" onClick={() => setShowPresets((v) => !v)} className="w-full">
+          {showPresets ? 'Ocultar predefinidas' : 'Explorar predefinidas'}
+        </Button>
+      </Card>
+
+      {showPresets && <PresetsList onUsed={onChange} />}
+
+      {routines.length === 0 ? (
+        <EmptyState title="Sin rutinas" hint="Crea una desde cero o copia una predefinida." />
+      ) : (
+        <div className="space-y-2">
+          {routines.map((r) => {
+            const isActive = active?.id === r.id;
+            return (
+              <Panel key={r.id} className="p-3 flex items-center justify-between">
+                <div>
+                  <p className="font-body font-medium flex items-center gap-2">
+                    {r.name}
+                    {isActive && (
+                      <span className="text-[10px] uppercase tracking-wide text-ink bg-volt rounded px-1.5 py-0.5 font-semibold">
+                        Activa
+                      </span>
+                    )}
+                  </p>
+                  <p className="text-muted text-xs font-body">{r.category || 'Sin categoría'}</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  {!isActive && (
+                    <button onClick={() => activate(r.id)} className="text-volt/80 hover:text-volt text-sm font-body">
+                      Activar
+                    </button>
+                  )}
+                  <button onClick={() => remove(r.id)} className="text-blood/70 hover:text-blood text-sm font-body">
+                    Archivar
+                  </button>
+                </div>
+              </Panel>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PresetsList({ onUsed }) {
+  const [presets, setPresets] = useState(null);
+  const [busy, setBusy] = useState('');
+
+  useEffect(() => {
+    api.listPresets().then(setPresets).catch(() => setPresets([]));
+  }, []);
+
+  async function use(id) {
+    setBusy(id);
+    try {
+      await api.usePreset(id);
+      await onUsed();
+    } finally { setBusy(''); }
+  }
+
+  if (presets === null) return <p className="text-muted font-body mb-6">Cargando predefinidas…</p>;
+  if (presets.length === 0) {
+    return (
+      <Card className="p-4 mb-6">
+        <p className="font-body text-muted text-sm">
+          Aún no hay predefinidas cargadas. Se cargan por script de seed en la base de datos.
+        </p>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="p-4 mb-6">
+      <p className="text-xs uppercase tracking-widest text-muted font-body mb-3">Biblioteca de predefinidas</p>
+      <div className="space-y-2">
+        {presets.map((p) => (
+          <div key={p.id} className="flex items-center justify-between border-b border-line pb-2 last:border-0">
+            <div>
+              <p className="font-body text-sm font-medium">{p.name}</p>
+              <p className="text-muted text-xs font-body">
+                {p.category} · {p.templateDays?.length || 0} días
+              </p>
+            </div>
+            <button onClick={() => use(p.id)} disabled={busy === p.id}
+                    className="text-volt/80 hover:text-volt text-sm font-body disabled:opacity-40">
+              {busy === p.id ? 'Copiando…' : 'Usar'}
+            </button>
+          </div>
+        ))}
+      </div>
+      <p className="text-muted text-[11px] font-body mt-3">
+        Al usar una predefinida se crea una copia personal modificable y se activa. La original queda intacta.
+      </p>
+    </Card>
   );
 }
 
@@ -111,12 +262,13 @@ function ExercisesTab({ exercises, onChange }) {
 }
 
 /* ---------- Días ---------- */
-function DaysTab({ days, exercises, onChange }) {
+function DaysTab({ days, exercises, active, onChange }) {
   const [newDayName, setNewDayName] = useState('');
   const [editing, setEditing] = useState(null); // día en edición
 
   async function addDay() {
     if (!newDayName.trim()) return;
+    // El backend engancha el día a la rutina activa automáticamente.
     await api.createDay({ name: newDayName.trim(), order: days.length + 1, exercises: [] });
     setNewDayName('');
     await onChange();
@@ -129,8 +281,21 @@ function DaysTab({ days, exercises, onChange }) {
 
   const exMap = Object.fromEntries(exercises.map((e) => [e.id, e]));
 
+  if (!active) {
+    return (
+      <EmptyState
+        title="Sin rutina activa"
+        hint="Activa o crea una rutina en la pestaña Rutinas para añadirle días."
+      />
+    );
+  }
+
   return (
     <div>
+      <p className="text-xs uppercase tracking-widest text-muted font-body mb-3">
+        Rutina activa · <span className="text-chalk">{active.name}</span>
+      </p>
+
       <Card className="p-4 mb-6 flex gap-2 items-end">
         <div className="flex-1">
           <Input label="Nuevo día" value={newDayName} onChange={(e) => setNewDayName(e.target.value)}
@@ -140,7 +305,7 @@ function DaysTab({ days, exercises, onChange }) {
       </Card>
 
       {days.length === 0 ? (
-        <EmptyState title="Sin días" hint="Crea tu primer día de entrenamiento." />
+        <EmptyState title="Sin días" hint="Crea el primer día de esta rutina." />
       ) : (
         <div className="space-y-3">
           {days.map((day) => (

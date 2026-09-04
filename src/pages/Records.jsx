@@ -120,6 +120,7 @@ export default function Records() {
           {maxWeight?.date && (
             <p className="text-muted text-xs font-body text-center">
               Peso máximo logrado el {new Date(maxWeight.date).toLocaleDateString('es-ES')}
+              {maxWeight.routineName && ` · rutina ${maxWeight.routineName}`}
             </p>
           )}
         </div>

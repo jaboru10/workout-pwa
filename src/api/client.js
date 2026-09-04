@@ -50,8 +50,19 @@ export const api = {
   updateExercise: (id, ex) => request(`/api/exercises/${id}`, { method: 'PUT', body: ex }),
   deleteExercise: (id) => request(`/api/exercises/${id}`, { method: 'DELETE' }),
 
+  // --- Rutinas (IL-004) ---
+  listRoutines: () => request('/api/routines'),
+  activeRoutine: () => request('/api/routines/active'), // null si no hay (204)
+  listPresets: () => request('/api/routines/presets'),
+  createRoutine: (routine) => request('/api/routines', { method: 'POST', body: routine }),
+  usePreset: (presetId) => request(`/api/routines/from-preset/${presetId}`, { method: 'POST' }),
+  updateRoutine: (id, routine) => request(`/api/routines/${id}`, { method: 'PUT', body: routine }),
+  activateRoutine: (id) => request(`/api/routines/${id}/activate`, { method: 'PUT' }),
+  deleteRoutine: (id) => request(`/api/routines/${id}`, { method: 'DELETE' }),
+
   // --- Días de entrenamiento ---
-  listDays: () => request('/api/training-days'),
+  listDays: (routineId) =>
+    request(`/api/training-days${routineId ? `?routineId=${routineId}` : ''}`),
   createDay: (day) => request('/api/training-days', { method: 'POST', body: day }),
   updateDay: (id, day) => request(`/api/training-days/${id}`, { method: 'PUT', body: day }),
   deleteDay: (id) => request(`/api/training-days/${id}`, { method: 'DELETE' }),

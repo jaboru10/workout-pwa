@@ -47,6 +47,7 @@ export default function History() {
                   </p>
                   <p className="text-muted text-sm font-body">
                     {s.exercises?.length || 0} ejercicios
+                    {s.routineName && ` · ${s.routineName}`}
                     {s.badDay && ' · día flojo'}
                   </p>
                 </div>

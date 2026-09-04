@@ -13,6 +13,8 @@ export default function LogSession() {
 
   const [days, setDays] = useState([]);
   const [exercises, setExercises] = useState([]);
+  const [activeRoutine, setActiveRoutine] = useState(null); // rutina activa (contexto al crear)
+  const [sessionRoutineName, setSessionRoutineName] = useState(null); // rutina congelada (al editar)
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
 
@@ -31,18 +33,20 @@ export default function LogSession() {
   const savedSigRef = useRef(null);                // firma de lo último persistido, para no guardar sin cambios
 
   useEffect(() => {
-    const base = [api.listDays(), api.listExercises()];
+    const base = [api.listDays(), api.listExercises(), api.activeRoutine()];
     const all = editing ? [...base, api.getSession(sessionId)] : base;
 
     Promise.all(all)
-      .then(([d, e, session]) => {
+      .then(([d, e, routine, session]) => {
         setDays(d);
         setExercises(e);
+        setActiveRoutine(routine);
         if (!session) return;
         if (!isWithinEditWindow(session.date)) {
           setLoadError(`Esta sesión tiene más de ${EDIT_WINDOW_DAYS} días y ya no se puede editar.`);
           return;
         }
+        setSessionRoutineName(session.routineName || null);
         prefill(session);
         setHydrated(true); // a partir de aquí, cualquier cambio real dispara autoguardado
       })
@@ -306,12 +310,21 @@ export default function LogSession() {
 
   return (
     <div className="px-5 pt-8">
-      <div className="flex items-baseline justify-between mb-5">
+      <div className="flex items-baseline justify-between mb-1">
         <h1 className="font-display text-4xl font-bold uppercase tracking-tight">
           {editing ? 'Editar sesión' : 'Registrar'}
         </h1>
         {editing && <AutoSaveStatus status={autoStatus} />}
       </div>
+      {/* Contexto de rutina (padre). En edición es la rutina congelada de la
+          sesión; al crear, la rutina activa a la que se vinculará. */}
+      <p className="text-muted text-xs font-body mb-5">
+        Rutina:{' '}
+        <span className="text-volt">
+          {editing ? (sessionRoutineName || 'sin rutina')
+                   : (activeRoutine?.name || 'sin rutina activa')}
+        </span>
+      </p>
 
       <Card className="p-4 mb-4 space-y-3">
         <Input label="Fecha" type="date" value={date} onChange={(e) => setDate(e.target.value)} />

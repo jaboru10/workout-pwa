@@ -63,11 +63,14 @@ export default function Days() {
 }
 
 /* ---------- Rutinas (IL-004) ---------- */
-const CATEGORIES = ['Fuerza', 'Hipertrofia', 'Principiante', 'Híbrido', 'Otra'];
+// Jerarquía de 3 escalones: Nivel > Tipo > Rutina.
+const LEVELS = ['Principiante', 'Intermedio', 'Avanzado'];
+const TYPES = ['Fuerza', 'Hipertrofia', 'Híbrido'];
 
 function RoutinesTab({ routines, active, onChange }) {
   const [name, setName] = useState('');
-  const [category, setCategory] = useState('Hipertrofia');
+  const [level, setLevel] = useState('Principiante');
+  const [type, setType] = useState('Fuerza');
   const [saving, setSaving] = useState(false);
   const [showPresets, setShowPresets] = useState(false);
 
@@ -75,7 +78,7 @@ function RoutinesTab({ routines, active, onChange }) {
     if (!name.trim()) return;
     setSaving(true);
     try {
-      await api.createRoutine({ name: name.trim(), category });
+      await api.createRoutine({ name: name.trim(), level, type });
       setName('');
       await onChange();
     } finally { setSaving(false); }
@@ -97,13 +100,22 @@ function RoutinesTab({ routines, active, onChange }) {
       <Card className="p-4 mb-6 space-y-3">
         <Input label="Nueva rutina" value={name} onChange={(e) => setName(e.target.value)}
                placeholder="Push/Pull/Legs" />
-        <label className="block">
-          <span className="block text-xs uppercase tracking-wider text-muted mb-1.5 font-body">Categoría</span>
-          <select value={category} onChange={(e) => setCategory(e.target.value)}
-                  className="w-full bg-panel2 border border-line rounded-lg px-3 py-2.5 text-chalk font-body focus:outline-none focus:border-volt/60">
-            {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
-        </label>
+        <div className="flex gap-3">
+          <label className="flex-1">
+            <span className="block text-xs uppercase tracking-wider text-muted mb-1.5 font-body">Nivel</span>
+            <select value={level} onChange={(e) => setLevel(e.target.value)}
+                    className="w-full bg-panel2 border border-line rounded-lg px-3 py-2.5 text-chalk font-body focus:outline-none focus:border-volt/60">
+              {LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}
+            </select>
+          </label>
+          <label className="flex-1">
+            <span className="block text-xs uppercase tracking-wider text-muted mb-1.5 font-body">Tipo</span>
+            <select value={type} onChange={(e) => setType(e.target.value)}
+                    className="w-full bg-panel2 border border-line rounded-lg px-3 py-2.5 text-chalk font-body focus:outline-none focus:border-volt/60">
+              {TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </label>
+        </div>
         <Button onClick={create} disabled={saving} className="w-full">Crear desde cero</Button>
         <Button variant="outline" onClick={() => setShowPresets((v) => !v)} className="w-full">
           {showPresets ? 'Ocultar predefinidas' : 'Explorar predefinidas'}
@@ -129,7 +141,9 @@ function RoutinesTab({ routines, active, onChange }) {
                       </span>
                     )}
                   </p>
-                  <p className="text-muted text-xs font-body">{r.category || 'Sin categoría'}</p>
+                  <p className="text-muted text-xs font-body">
+                    {[r.level, r.type].filter(Boolean).join(' · ') || 'Sin clasificar'}
+                  </p>
                 </div>
                 <div className="flex items-center gap-3">
                   {!isActive && (
@@ -150,9 +164,12 @@ function RoutinesTab({ routines, active, onChange }) {
   );
 }
 
+// Buscador en cascada de 3 escalones: Nivel → Tipo → Rutina.
 function PresetsList({ onUsed }) {
   const [presets, setPresets] = useState(null);
   const [busy, setBusy] = useState('');
+  const [selLevel, setSelLevel] = useState(null);
+  const [selType, setSelType] = useState(null);
 
   useEffect(() => {
     api.listPresets().then(setPresets).catch(() => setPresets([]));
@@ -177,28 +194,85 @@ function PresetsList({ onUsed }) {
     );
   }
 
+  // Orden fijo por nivel; solo se muestran los que existen en los datos.
+  const levelOrder = ['Principiante', 'Intermedio', 'Avanzado'];
+  const levels = levelOrder.filter((l) => presets.some((p) => p.level === l));
+  const typesForLevel = (lvl) =>
+    [...new Set(presets.filter((p) => p.level === lvl && p.type).map((p) => p.type))];
+  const routinesFor = (lvl, t) => presets.filter((p) => p.level === lvl && p.type === t);
+
   return (
     <Card className="p-4 mb-6">
-      <p className="text-xs uppercase tracking-widest text-muted font-body mb-3">Biblioteca de predefinidas</p>
-      <div className="space-y-2">
-        {presets.map((p) => (
-          <div key={p.id} className="flex items-center justify-between border-b border-line pb-2 last:border-0">
-            <div>
-              <p className="font-body text-sm font-medium">{p.name}</p>
-              <p className="text-muted text-xs font-body">
-                {p.category} · {p.templateDays?.length || 0} días
-              </p>
-            </div>
-            <button onClick={() => use(p.id)} disabled={busy === p.id}
-                    className="text-volt/80 hover:text-volt text-sm font-body disabled:opacity-40">
-              {busy === p.id ? 'Copiando…' : 'Usar'}
+      {/* Migas de pan */}
+      <div className="flex items-center gap-1.5 text-xs font-body mb-3">
+        <button onClick={() => { setSelLevel(null); setSelType(null); }}
+                className={selLevel ? 'text-muted hover:text-chalk' : 'text-volt'}>
+          Predefinidas
+        </button>
+        {selLevel && (
+          <>
+            <span className="text-muted">›</span>
+            <button onClick={() => setSelType(null)}
+                    className={selType ? 'text-muted hover:text-chalk' : 'text-volt'}>
+              {selLevel}
             </button>
-          </div>
-        ))}
+          </>
+        )}
+        {selType && (<><span className="text-muted">›</span><span className="text-volt">{selType}</span></>)}
       </div>
-      <p className="text-muted text-[11px] font-body mt-3">
-        Al usar una predefinida se crea una copia personal modificable y se activa. La original queda intacta.
-      </p>
+
+      {/* Paso 1: Nivel */}
+      {!selLevel && (
+        <div className="space-y-2">
+          <p className="text-[11px] uppercase tracking-widest text-muted font-body">Elige nivel</p>
+          {levels.map((l) => (
+            <button key={l} onClick={() => setSelLevel(l)}
+                    className="w-full flex items-center justify-between bg-panel2 rounded-lg px-3 py-2.5 hover:bg-line transition-colors">
+              <span className="font-body text-sm">{l}</span>
+              <span className="text-muted text-xs font-body">
+                {presets.filter((p) => p.level === l).length} rutinas ›
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Paso 2: Tipo */}
+      {selLevel && !selType && (
+        <div className="space-y-2">
+          <p className="text-[11px] uppercase tracking-widest text-muted font-body">Elige tipo</p>
+          {typesForLevel(selLevel).map((t) => (
+            <button key={t} onClick={() => setSelType(t)}
+                    className="w-full flex items-center justify-between bg-panel2 rounded-lg px-3 py-2.5 hover:bg-line transition-colors">
+              <span className="font-body text-sm">{t}</span>
+              <span className="text-muted text-xs font-body">
+                {routinesFor(selLevel, t).length} rutinas ›
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Paso 3: Rutina */}
+      {selLevel && selType && (
+        <div className="space-y-2">
+          {routinesFor(selLevel, selType).map((p) => (
+            <div key={p.id} className="flex items-center justify-between border-b border-line pb-2 last:border-0">
+              <div>
+                <p className="font-body text-sm font-medium">{p.name}</p>
+                <p className="text-muted text-xs font-body">{p.templateDays?.length || 0} días</p>
+              </div>
+              <button onClick={() => use(p.id)} disabled={busy === p.id}
+                      className="text-volt/80 hover:text-volt text-sm font-body disabled:opacity-40">
+                {busy === p.id ? 'Copiando…' : 'Usar'}
+              </button>
+            </div>
+          ))}
+          <p className="text-muted text-[11px] font-body mt-3">
+            Al usar una predefinida se crea una copia personal modificable y se activa. La original queda intacta.
+          </p>
+        </div>
+      )}
     </Card>
   );
 }

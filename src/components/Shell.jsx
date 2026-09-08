@@ -1,5 +1,32 @@
+import { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+
+// Con el teclado abierto, algunos navegadores móviles achican el visual
+// viewport pero dejan `position: fixed` anclado al layout viewport completo,
+// así que la barra inferior "flota" a la altura del teclado en vez de pegarse
+// al borde visible. Medimos el hueco con la Visual Viewport API y lo restamos.
+function useKeyboardInset() {
+  const [inset, setInset] = useState(0);
+
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const update = () => {
+      const gap = window.innerHeight - vv.height - vv.offsetTop;
+      setInset(Math.max(0, Math.round(gap)));
+    };
+    update();
+    vv.addEventListener('resize', update);
+    vv.addEventListener('scroll', update);
+    return () => {
+      vv.removeEventListener('resize', update);
+      vv.removeEventListener('scroll', update);
+    };
+  }, []);
+
+  return inset;
+}
 
 const items = [
   { to: '/', label: 'Hoy', icon: '◧', end: true },
@@ -14,6 +41,7 @@ const items = [
 // ancho fijo: se estira hasta max-w-app y respira con padding fluido.
 export default function Shell({ children }) {
   const { user, logout } = useAuth();
+  const keyboardInset = useKeyboardInset();
 
   return (
     <div className="min-h-screen flex">
@@ -62,8 +90,11 @@ export default function Shell({ children }) {
 
       <main className="flex-1 min-w-0 pb-20 sm:pb-0">{children}</main>
 
-      <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-20 border-t border-line
-                      bg-panel/95 backdrop-blur px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+      <nav
+        className="sm:hidden fixed left-0 right-0 z-20 border-t border-line
+                   bg-panel/95 backdrop-blur px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+        style={{ bottom: keyboardInset }}
+      >
         <div className="flex justify-around">
           {items.map((it) => (
             <NavLink

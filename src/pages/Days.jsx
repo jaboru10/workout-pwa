@@ -1,9 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api/client';
-import { Button, Input, Card, Panel, EmptyState } from '../components/ui';
+import {
+  Button, Card, EmptyState, Input, Label, Loading, Panel, SectionTitle, Select,
+} from '../components/ui';
+import { PageBody, PageHeader } from '../components/Shell';
+
+const TABS = [['routines', 'Rutinas'], ['days', 'Días'], ['exercises', 'Ejercicios']];
 
 export default function Days() {
-  const [tab, setTab] = useState('routines'); // 'routines' | 'days' | 'exercises'
+  const [tab, setTab] = useState('routines');
   const [routines, setRoutines] = useState([]);
   const [active, setActive] = useState(null);
   const [days, setDays] = useState([]);
@@ -13,57 +18,47 @@ export default function Days() {
   async function reload() {
     const [r, a, d, e] = await Promise.all([
       api.listRoutines(),
-      api.activeRoutine(),   // null si no hay rutina activa
-      api.listDays(),        // días de la rutina activa
+      api.activeRoutine(),
+      api.listDays(),
       api.listExercises(),
     ]);
-    setRoutines(r);
-    setActive(a);
-    setDays(d);
-    setExercises(e);
+    setRoutines(r); setActive(a); setDays(d); setExercises(e);
   }
 
-  useEffect(() => {
-    reload().catch(() => {}).finally(() => setLoading(false));
-  }, []);
+  useEffect(() => { reload().catch(() => {}).finally(() => setLoading(false)); }, []);
 
   return (
-    <div className="px-5 pt-8">
-      <h1 className="font-display text-4xl font-bold uppercase tracking-tight mb-5">Plantilla</h1>
+    <>
+      <PageHeader crumb={active ? `${active.name} · rutina activa` : 'Sin rutina activa'} title="Plantilla">
+        <div className="flex gap-1 bg-panel2 border border-line rounded-xl p-1">
+          {TABS.map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setTab(key)}
+              className={`rounded-lg px-3.5 py-1.5 text-[13px] font-semibold transition-colors ${
+                tab === key ? 'bg-accent text-accentInk' : 'text-muted hover:text-chalk'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </PageHeader>
 
-      <div className="flex gap-2 mb-6">
-        {[
-          ['routines', 'Rutinas'],
-          ['days', 'Días'],
-          ['exercises', 'Ejercicios'],
-        ].map(([key, label]) => (
-          <button
-            key={key}
-            onClick={() => setTab(key)}
-            className={`flex-1 py-2 rounded-lg font-body text-sm font-semibold transition-colors ${
-              tab === key ? 'bg-volt text-ink' : 'bg-panel2 text-muted'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {loading ? (
-        <p className="text-muted font-body">Cargando…</p>
-      ) : tab === 'routines' ? (
-        <RoutinesTab routines={routines} active={active} onChange={reload} />
-      ) : tab === 'days' ? (
-        <DaysTab days={days} exercises={exercises} active={active} onChange={reload} />
-      ) : (
-        <ExercisesTab exercises={exercises} onChange={reload} />
-      )}
-    </div>
+      <PageBody>
+        {loading ? <Loading /> : tab === 'routines' ? (
+          <RoutinesTab routines={routines} active={active} onChange={reload} />
+        ) : tab === 'days' ? (
+          <DaysTab days={days} exercises={exercises} active={active} onChange={reload} />
+        ) : (
+          <ExercisesTab exercises={exercises} onChange={reload} />
+        )}
+      </PageBody>
+    </>
   );
 }
 
 /* ---------- Rutinas (IL-004) ---------- */
-// Jerarquía de 3 escalones: Nivel > Tipo > Rutina.
 const LEVELS = ['Principiante', 'Intermedio', 'Avanzado'];
 const TYPES = ['Fuerza', 'Hipertrofia', 'Híbrido'];
 
@@ -84,10 +79,7 @@ function RoutinesTab({ routines, active, onChange }) {
     } finally { setSaving(false); }
   }
 
-  async function activate(id) {
-    await api.activateRoutine(id);
-    await onChange();
-  }
+  async function activate(id) { await api.activateRoutine(id); await onChange(); }
 
   async function remove(id) {
     if (!confirm('¿Archivar esta rutina? Sus días y el historial no se borran.')) return;
@@ -96,70 +88,70 @@ function RoutinesTab({ routines, active, onChange }) {
   }
 
   return (
-    <div>
-      <Card className="p-4 mb-6 space-y-3">
-        <Input label="Nueva rutina" value={name} onChange={(e) => setName(e.target.value)}
-               placeholder="Push/Pull/Legs" />
-        <div className="flex gap-3">
-          <label className="flex-1">
-            <span className="block text-xs uppercase tracking-wider text-muted mb-1.5 font-body">Nivel</span>
-            <select value={level} onChange={(e) => setLevel(e.target.value)}
-                    className="w-full bg-panel2 border border-line rounded-lg px-3 py-2.5 text-chalk font-body focus:outline-none focus:border-volt/60">
+    <div className="grid gap-5 items-start xl:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+      <div className="flex flex-col gap-5 min-w-0">
+        <Card className="p-5 flex flex-col gap-3.5">
+          <SectionTitle>Nueva rutina</SectionTitle>
+          <Input label="Nombre" value={name} onChange={(e) => setName(e.target.value)} placeholder="Push/Pull/Legs" />
+          <div className="flex gap-3">
+            <Select label="Nivel" value={level} onChange={(e) => setLevel(e.target.value)}>
               {LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}
-            </select>
-          </label>
-          <label className="flex-1">
-            <span className="block text-xs uppercase tracking-wider text-muted mb-1.5 font-body">Tipo</span>
-            <select value={type} onChange={(e) => setType(e.target.value)}
-                    className="w-full bg-panel2 border border-line rounded-lg px-3 py-2.5 text-chalk font-body focus:outline-none focus:border-volt/60">
+            </Select>
+            <Select label="Tipo" value={type} onChange={(e) => setType(e.target.value)}>
               {TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-            </select>
-          </label>
-        </div>
-        <Button onClick={create} disabled={saving} className="w-full">Crear desde cero</Button>
-        <Button variant="outline" onClick={() => setShowPresets((v) => !v)} className="w-full">
-          {showPresets ? 'Ocultar predefinidas' : 'Explorar predefinidas'}
-        </Button>
-      </Card>
+            </Select>
+          </div>
+          <Button onClick={create} disabled={saving}>Crear desde cero</Button>
+          <Button variant="ghost" onClick={() => setShowPresets((v) => !v)}>
+            {showPresets ? 'Ocultar predefinidas' : 'Explorar predefinidas'}
+          </Button>
+        </Card>
 
-      {showPresets && <PresetsList onUsed={onChange} />}
+        {showPresets && <PresetsList onUsed={onChange} />}
+      </div>
 
-      {routines.length === 0 ? (
-        <EmptyState title="Sin rutinas" hint="Crea una desde cero o copia una predefinida." />
-      ) : (
-        <div className="space-y-2">
-          {routines.map((r) => {
-            const isActive = active?.id === r.id;
-            return (
-              <Panel key={r.id} className="p-3 flex items-center justify-between">
-                <div>
-                  <p className="font-body font-medium flex items-center gap-2">
-                    {r.name}
-                    {isActive && (
-                      <span className="text-[10px] uppercase tracking-wide text-ink bg-volt rounded px-1.5 py-0.5 font-semibold">
-                        Activa
-                      </span>
+      <div className="min-w-0">
+        {routines.length === 0 ? (
+          <EmptyState title="Sin rutinas" hint="Crea una desde cero o copia una predefinida." />
+        ) : (
+          <div className="grid gap-2.5 [grid-template-columns:repeat(auto-fill,minmax(280px,1fr))]">
+            {routines.map((r) => {
+              const isActive = active?.id === r.id;
+              return (
+                <Panel
+                  key={r.id}
+                  className={`p-4 flex flex-col gap-3 min-w-0 ${isActive ? 'border-accent/45 bg-accent/10' : ''}`}
+                >
+                  <div className="min-w-0">
+                    <p className="font-semibold flex items-center gap-2 min-w-0">
+                      <span className="truncate">{r.name}</span>
+                      {isActive && (
+                        <span className="shrink-0 font-display text-[10px] uppercase tracking-[0.12em]
+                                         text-accentInk bg-accent rounded px-1.5 py-0.5">
+                          Activa
+                        </span>
+                      )}
+                    </p>
+                    <p className="text-xs text-muted mt-0.5">
+                      {[r.level, r.type].filter(Boolean).join(' · ') || 'Sin clasificar'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3 mt-auto">
+                    {!isActive && (
+                      <button onClick={() => activate(r.id)} className="text-[13px] text-muted hover:text-accent">
+                        Activar
+                      </button>
                     )}
-                  </p>
-                  <p className="text-muted text-xs font-body">
-                    {[r.level, r.type].filter(Boolean).join(' · ') || 'Sin clasificar'}
-                  </p>
-                </div>
-                <div className="flex items-center gap-3">
-                  {!isActive && (
-                    <button onClick={() => activate(r.id)} className="text-volt/80 hover:text-volt text-sm font-body">
-                      Activar
+                    <button onClick={() => remove(r.id)} className="text-[13px] text-muted hover:text-danger">
+                      Archivar
                     </button>
-                  )}
-                  <button onClick={() => remove(r.id)} className="text-blood/70 hover:text-blood text-sm font-body">
-                    Archivar
-                  </button>
-                </div>
-              </Panel>
-            );
-          })}
-        </div>
-      )}
+                  </div>
+                </Panel>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -171,104 +163,101 @@ function PresetsList({ onUsed }) {
   const [selLevel, setSelLevel] = useState(null);
   const [selType, setSelType] = useState(null);
 
-  useEffect(() => {
-    api.listPresets().then(setPresets).catch(() => setPresets([]));
-  }, []);
+  useEffect(() => { api.listPresets().then(setPresets).catch(() => setPresets([])); }, []);
 
   async function use(id) {
     setBusy(id);
-    try {
-      await api.usePreset(id);
-      await onUsed();
-    } finally { setBusy(''); }
+    try { await api.usePreset(id); await onUsed(); } finally { setBusy(''); }
   }
 
-  if (presets === null) return <p className="text-muted font-body mb-6">Cargando predefinidas…</p>;
+  if (presets === null) return <Loading what="Cargando predefinidas" />;
   if (presets.length === 0) {
     return (
-      <Card className="p-4 mb-6">
-        <p className="font-body text-muted text-sm">
+      <Card className="p-5">
+        <p className="text-sm text-muted">
           Aún no hay predefinidas cargadas. Se cargan por script de seed en la base de datos.
         </p>
       </Card>
     );
   }
 
-  // Orden fijo por nivel; solo se muestran los que existen en los datos.
   const levelOrder = ['Principiante', 'Intermedio', 'Avanzado'];
   const levels = levelOrder.filter((l) => presets.some((p) => p.level === l));
-  const typesForLevel = (lvl) =>
-    [...new Set(presets.filter((p) => p.level === lvl && p.type).map((p) => p.type))];
+  const typesForLevel = (lvl) => [...new Set(presets.filter((p) => p.level === lvl && p.type).map((p) => p.type))];
   const routinesFor = (lvl, t) => presets.filter((p) => p.level === lvl && p.type === t);
 
   return (
-    <Card className="p-4 mb-6">
-      {/* Migas de pan */}
-      <div className="flex items-center gap-1.5 text-xs font-body mb-3">
-        <button onClick={() => { setSelLevel(null); setSelType(null); }}
-                className={selLevel ? 'text-muted hover:text-chalk' : 'text-volt'}>
+    <Card className="p-5">
+      <div className="flex items-center gap-1.5 text-xs mb-3.5">
+        <button
+          onClick={() => { setSelLevel(null); setSelType(null); }}
+          className={selLevel ? 'text-muted hover:text-chalk' : 'text-accent'}
+        >
           Predefinidas
         </button>
         {selLevel && (
           <>
             <span className="text-muted">›</span>
-            <button onClick={() => setSelType(null)}
-                    className={selType ? 'text-muted hover:text-chalk' : 'text-volt'}>
+            <button onClick={() => setSelType(null)} className={selType ? 'text-muted hover:text-chalk' : 'text-accent'}>
               {selLevel}
             </button>
           </>
         )}
-        {selType && (<><span className="text-muted">›</span><span className="text-volt">{selType}</span></>)}
+        {selType && (<><span className="text-muted">›</span><span className="text-accent">{selType}</span></>)}
       </div>
 
-      {/* Paso 1: Nivel */}
       {!selLevel && (
-        <div className="space-y-2">
-          <p className="text-[11px] uppercase tracking-widest text-muted font-body">Elige nivel</p>
+        <div className="flex flex-col gap-2">
+          <Label>Elige nivel</Label>
           {levels.map((l) => (
-            <button key={l} onClick={() => setSelLevel(l)}
-                    className="w-full flex items-center justify-between bg-panel2 rounded-lg px-3 py-2.5 hover:bg-line transition-colors">
-              <span className="font-body text-sm">{l}</span>
-              <span className="text-muted text-xs font-body">
-                {presets.filter((p) => p.level === l).length} rutinas ›
-              </span>
+            <button
+              key={l}
+              onClick={() => setSelLevel(l)}
+              className="flex items-center justify-between gap-3 rounded-lg bg-panel2 border border-line
+                         px-3.5 py-2.5 hover:border-accent/45 hover:text-accent"
+            >
+              <span className="text-sm">{l}</span>
+              <span className="font-mono text-xs text-muted">{presets.filter((p) => p.level === l).length} rutinas ›</span>
             </button>
           ))}
         </div>
       )}
 
-      {/* Paso 2: Tipo */}
       {selLevel && !selType && (
-        <div className="space-y-2">
-          <p className="text-[11px] uppercase tracking-widest text-muted font-body">Elige tipo</p>
+        <div className="flex flex-col gap-2">
+          <Label>Elige tipo</Label>
           {typesForLevel(selLevel).map((t) => (
-            <button key={t} onClick={() => setSelType(t)}
-                    className="w-full flex items-center justify-between bg-panel2 rounded-lg px-3 py-2.5 hover:bg-line transition-colors">
-              <span className="font-body text-sm">{t}</span>
-              <span className="text-muted text-xs font-body">
-                {routinesFor(selLevel, t).length} rutinas ›
-              </span>
+            <button
+              key={t}
+              onClick={() => setSelType(t)}
+              className="flex items-center justify-between gap-3 rounded-lg bg-panel2 border border-line
+                         px-3.5 py-2.5 hover:border-accent/45 hover:text-accent"
+            >
+              <span className="text-sm">{t}</span>
+              <span className="font-mono text-xs text-muted">{routinesFor(selLevel, t).length} rutinas ›</span>
             </button>
           ))}
         </div>
       )}
 
-      {/* Paso 3: Rutina */}
       {selLevel && selType && (
-        <div className="space-y-2">
+        <div className="flex flex-col gap-2">
           {routinesFor(selLevel, selType).map((p) => (
-            <div key={p.id} className="flex items-center justify-between border-b border-line pb-2 last:border-0">
-              <div>
-                <p className="font-body text-sm font-medium">{p.name}</p>
-                <p className="text-muted text-xs font-body">{p.templateDays?.length || 0} días</p>
+            <div key={p.id} className="flex items-center justify-between gap-3 border-b border-line pb-2.5 last:border-0">
+              <div className="min-w-0">
+                <p className="text-sm font-medium truncate">{p.name}</p>
+                <p className="text-xs text-muted">{p.templateDays?.length || 0} días</p>
               </div>
-              <button onClick={() => use(p.id)} disabled={busy === p.id}
-                      className="text-volt/80 hover:text-volt text-sm font-body disabled:opacity-40">
+              <button
+                onClick={() => use(p.id)}
+                disabled={busy === p.id}
+                className="text-[13px] text-muted hover:text-accent disabled:opacity-40 shrink-0"
+              >
                 {busy === p.id ? 'Copiando…' : 'Usar'}
               </button>
             </div>
           ))}
-          <p className="text-muted text-[11px] font-body mt-3">
+          <p className="text-[11px] text-muted mt-2">
             Al usar una predefinida se crea una copia personal modificable y se activa. La original queda intacta.
           </p>
         </div>
@@ -283,6 +272,7 @@ function ExercisesTab({ exercises, onChange }) {
   const [muscle, setMuscle] = useState('');
   const [bodyweight, setBodyweight] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [query, setQuery] = useState('');
 
   async function add() {
     if (!name.trim()) return;
@@ -294,43 +284,50 @@ function ExercisesTab({ exercises, onChange }) {
     } finally { setSaving(false); }
   }
 
-  async function remove(id) {
-    await api.deleteExercise(id);
-    await onChange();
-  }
+  async function remove(id) { await api.deleteExercise(id); await onChange(); }
+
+  const filtered = exercises.filter((e) =>
+    `${e.name} ${e.muscleGroup || ''}`.toLowerCase().includes(query.trim().toLowerCase())
+  );
 
   return (
-    <div>
-      <Card className="p-4 mb-6 space-y-3">
+    <div className="grid gap-5 items-start xl:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)]">
+      <Card className="p-5 flex flex-col gap-3.5 min-w-0">
+        <SectionTitle>Nuevo ejercicio</SectionTitle>
         <Input label="Nombre" value={name} onChange={(e) => setName(e.target.value)} placeholder="Press banca" />
         <Input label="Grupo muscular" value={muscle} onChange={(e) => setMuscle(e.target.value)} placeholder="Pecho" />
-        <label className="flex items-center gap-2 text-sm font-body text-chalk">
-          <input type="checkbox" checked={bodyweight} onChange={(e) => setBodyweight(e.target.checked)}
-                 className="accent-volt w-4 h-4" />
+        <label className="flex items-center gap-2 text-sm text-muted cursor-pointer">
+          <input
+            type="checkbox" checked={bodyweight} onChange={(e) => setBodyweight(e.target.checked)}
+            className="accent-accent w-4 h-4"
+          />
           Peso corporal (el peso registrado es el lastre)
         </label>
-        <Button onClick={add} disabled={saving} className="w-full">Añadir ejercicio</Button>
+        <Button onClick={add} disabled={saving}>Añadir ejercicio</Button>
       </Card>
 
-      {exercises.length === 0 ? (
-        <EmptyState title="Sin ejercicios" hint="Añade los ejercicios que sueles hacer." />
-      ) : (
-        <div className="space-y-2">
-          {exercises.map((ex) => (
-            <Panel key={ex.id} className="p-3 flex items-center justify-between">
-              <div>
-                <p className="font-body font-medium">{ex.name}</p>
-                <p className="text-muted text-xs font-body">
-                  {ex.muscleGroup || 'Sin grupo'}{ex.bodyweight ? ' · peso corporal' : ''}
-                </p>
-              </div>
-              <button onClick={() => remove(ex.id)} className="text-blood/70 hover:text-blood text-sm font-body px-2">
-                Borrar
-              </button>
-            </Panel>
-          ))}
-        </div>
-      )}
+      <div className="min-w-0 flex flex-col gap-3">
+        <Input placeholder="Buscar ejercicio…" value={query} onChange={(e) => setQuery(e.target.value)} />
+        {filtered.length === 0 ? (
+          <EmptyState title="Sin ejercicios" hint="Añade los ejercicios que sueles hacer." />
+        ) : (
+          <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(240px,1fr))]">
+            {filtered.map((ex) => (
+              <Panel key={ex.id} className="p-3.5 flex items-center justify-between gap-3 min-w-0">
+                <div className="min-w-0">
+                  <p className="font-medium truncate">{ex.name}</p>
+                  <p className="text-xs text-muted truncate">
+                    {ex.muscleGroup || 'Sin grupo'}{ex.bodyweight ? ' · peso corporal' : ''}
+                  </p>
+                </div>
+                <button onClick={() => remove(ex.id)} className="text-[13px] text-muted hover:text-danger shrink-0">
+                  Borrar
+                </button>
+              </Panel>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -338,22 +335,24 @@ function ExercisesTab({ exercises, onChange }) {
 /* ---------- Días ---------- */
 function DaysTab({ days, exercises, active, onChange }) {
   const [newDayName, setNewDayName] = useState('');
-  const [editing, setEditing] = useState(null); // día en edición
+  const [selectedId, setSelectedId] = useState(null);
+
+  const exMap = useMemo(() => Object.fromEntries(exercises.map((e) => [e.id, e])), [exercises]);
+  const selected = days.find((d) => d.id === selectedId) || days[0] || null;
 
   async function addDay() {
     if (!newDayName.trim()) return;
-    // El backend engancha el día a la rutina activa automáticamente.
     await api.createDay({ name: newDayName.trim(), order: days.length + 1, exercises: [] });
     setNewDayName('');
     await onChange();
   }
 
   async function removeDay(id) {
+    if (!confirm('¿Borrar este día de la plantilla?')) return;
     await api.deleteDay(id);
+    if (selectedId === id) setSelectedId(null);
     await onChange();
   }
-
-  const exMap = Object.fromEntries(exercises.map((e) => [e.id, e]));
 
   if (!active) {
     return (
@@ -365,90 +364,88 @@ function DaysTab({ days, exercises, active, onChange }) {
   }
 
   return (
-    <div>
-      <p className="text-xs uppercase tracking-widest text-muted font-body mb-3">
-        Rutina activa · <span className="text-chalk">{active.name}</span>
-      </p>
-
-      <Card className="p-4 mb-6 flex gap-2 items-end">
-        <div className="flex-1">
-          <Input label="Nuevo día" value={newDayName} onChange={(e) => setNewDayName(e.target.value)}
-                 placeholder="Día A · Pecho/Tríceps" />
+    <div className="grid gap-5 items-start xl:grid-cols-[300px_minmax(0,1fr)]">
+      <Card className="p-5 flex flex-col gap-3.5 min-w-0">
+        <SectionTitle>Días de {active.name}</SectionTitle>
+        <div className="flex gap-2 items-end">
+          <Input
+            label="Nuevo día"
+            value={newDayName}
+            onChange={(e) => setNewDayName(e.target.value)}
+            placeholder="Día A · Pecho/Tríceps"
+          />
+          <Button onClick={addDay} className="shrink-0">Añadir</Button>
         </div>
-        <Button onClick={addDay}>Añadir</Button>
+
+        {days.length === 0 ? (
+          <p className="text-sm text-muted">Crea el primer día de esta rutina.</p>
+        ) : (
+          <div className="flex flex-col gap-1.5">
+            {days.map((day) => {
+              const isSel = selected?.id === day.id;
+              return (
+                <button
+                  key={day.id}
+                  onClick={() => setSelectedId(day.id)}
+                  className={`flex items-center justify-between gap-3 rounded-xl border px-3.5 py-3 text-left ${
+                    isSel ? 'bg-accent/12 border-accent/45' : 'bg-panel2 border-line hover:border-accent/40'
+                  }`}
+                >
+                  <span className="text-sm font-semibold truncate">{day.name}</span>
+                  <span className="font-mono text-xs text-muted shrink-0">
+                    {(day.exercises || []).length} ej
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </Card>
 
-      {days.length === 0 ? (
-        <EmptyState title="Sin días" hint="Crea el primer día de esta rutina." />
+      {selected ? (
+        <DayEditor
+          key={selected.id}
+          day={selected}
+          exMap={exMap}
+          exercises={exercises}
+          onChange={onChange}
+          onDelete={() => removeDay(selected.id)}
+        />
       ) : (
-        <div className="space-y-3">
-          {days.map((day) => (
-            <Card key={day.id} className="p-4">
-              <div className="flex items-center justify-between mb-3">
-                <p className="font-display text-xl uppercase tracking-wide">{day.name}</p>
-                <div className="flex gap-3">
-                  <button onClick={() => setEditing(editing?.id === day.id ? null : day)}
-                          className="text-muted hover:text-chalk text-sm font-body">
-                    {editing?.id === day.id ? 'Cerrar' : 'Editar'}
-                  </button>
-                  <button onClick={() => removeDay(day.id)}
-                          className="text-blood/70 hover:text-blood text-sm font-body">Borrar</button>
-                </div>
-              </div>
-
-              {(day.exercises || []).length === 0 ? (
-                <p className="text-muted text-sm font-body">Sin ejercicios asignados</p>
-              ) : (
-                <div className="space-y-1.5">
-                  {[...day.exercises].sort((a, b) => a.order - b.order).map((te, i) => (
-                    <div key={i} className="flex items-center gap-3 text-sm font-body">
-                      <span className="text-volt font-mono w-5">{i + 1}</span>
-                      <span className="flex-1">{exMap[te.exerciseId]?.name || '—'}</span>
-                      <span className="text-muted font-mono text-xs">
-                        {te.targetSets}×{te.targetReps}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {editing?.id === day.id && (
-                <DayEditor day={day} exercises={exercises} onChange={onChange} onDone={() => setEditing(null)} />
-              )}
-            </Card>
-          ))}
-        </div>
+        <EmptyState title="Ningún día" hint="Crea un día para empezar a asignarle ejercicios." />
       )}
     </div>
   );
 }
 
-function DayEditor({ day, exercises, onChange, onDone }) {
+function DayEditor({ day, exercises, exMap, onChange, onDelete }) {
   const [list, setList] = useState(() => [...(day.exercises || [])].sort((a, b) => a.order - b.order));
   const [exId, setExId] = useState('');
   const [sets, setSets] = useState(4);
   const [reps, setReps] = useState('6-8');
   const [saving, setSaving] = useState(false);
 
+  const mutate = (fn) => setList((prev) => {
+    const next = prev.map((r) => ({ ...r }));
+    fn(next);
+    next.forEach((r, i) => (r.order = i + 1));
+    return next;
+  });
+
   function addRow() {
     if (!exId) return;
-    setList([...list, { exerciseId: exId, order: list.length + 1, targetSets: Number(sets), targetReps: reps, notes: '' }]);
+    mutate((next) => next.push({
+      exerciseId: exId, order: next.length + 1, targetSets: Number(sets), targetReps: reps, notes: '',
+    }));
     setExId('');
   }
 
   function move(idx, dir) {
-    const next = [...list];
-    const j = idx + dir;
-    if (j < 0 || j >= next.length) return;
-    [next[idx], next[j]] = [next[j], next[idx]];
-    next.forEach((r, i) => (r.order = i + 1));
-    setList(next);
-  }
-
-  function removeRow(idx) {
-    const next = list.filter((_, i) => i !== idx);
-    next.forEach((r, i) => (r.order = i + 1));
-    setList(next);
+    mutate((next) => {
+      const j = idx + dir;
+      if (j < 0 || j >= next.length) return;
+      [next[idx], next[j]] = [next[j], next[idx]];
+    });
   }
 
   async function save() {
@@ -456,52 +453,96 @@ function DayEditor({ day, exercises, onChange, onDone }) {
     try {
       await api.updateDay(day.id, { ...day, exercises: list });
       await onChange();
-      onDone();
     } finally { setSaving(false); }
   }
 
-  const exMap = Object.fromEntries(exercises.map((e) => [e.id, e]));
+  const totalSets = list.reduce((n, r) => n + Number(r.targetSets || 0), 0);
 
   return (
-    <div className="mt-4 pt-4 border-t border-line space-y-3">
-      <div className="space-y-2">
-        {list.map((r, i) => (
-          <div key={i} className="flex items-center gap-2 bg-panel2 rounded-lg p-2">
-            <span className="text-volt font-mono text-sm w-5">{i + 1}</span>
-            <span className="flex-1 text-sm font-body">{exMap[r.exerciseId]?.name || '—'}</span>
-            <span className="text-muted font-mono text-xs">{r.targetSets}×{r.targetReps}</span>
-            <div className="flex gap-1">
-              <button onClick={() => move(i, -1)} className="text-muted hover:text-chalk px-1">↑</button>
-              <button onClick={() => move(i, 1)} className="text-muted hover:text-chalk px-1">↓</button>
-              <button onClick={() => removeRow(i)} className="text-blood/70 hover:text-blood px-1">×</button>
-            </div>
-          </div>
-        ))}
+    <Card className="p-6 min-w-0">
+      <div className="flex flex-wrap items-start justify-between gap-4 mb-5">
+        <div className="min-w-0">
+          <p className="font-display text-[11px] uppercase tracking-[0.16em] text-muted">Editando día</p>
+          <p className="mt-1 text-2xl font-bold tracking-[-0.02em] text-balance">{day.name}</p>
+          <p className="mt-1 font-mono text-xs text-muted">{list.length} ejercicios · {totalSets} series objetivo</p>
+        </div>
+        <div className="flex gap-2.5">
+          <Button variant="danger" size="sm" onClick={onDelete}>Borrar día</Button>
+          <Button onClick={save} disabled={saving}>{saving ? 'Guardando…' : 'Guardar día'}</Button>
+        </div>
       </div>
 
-      <div className="flex gap-2 items-end">
-        <label className="flex-1">
-          <span className="block text-xs uppercase tracking-wider text-muted mb-1.5 font-body">Ejercicio</span>
-          <select value={exId} onChange={(e) => setExId(e.target.value)}
-                  className="w-full bg-panel2 border border-line rounded-lg px-3 py-2.5 text-chalk font-body focus:outline-none focus:border-volt/60">
+      <div className="grid gap-2 px-1 pb-2
+                      [grid-template-columns:24px_minmax(64px,1fr)_minmax(0,66px)_minmax(0,86px)_82px]
+                      font-display text-[11px] uppercase tracking-[0.14em] text-muted">
+        <span>#</span><span>Ejercicio</span><span>Series</span><span>Reps</span>
+        <span className="text-right">Orden</span>
+      </div>
+
+      {list.length === 0 ? (
+        <p className="text-sm text-muted py-4">Sin ejercicios asignados todavía.</p>
+      ) : (
+        <div className="flex flex-col gap-1.5">
+          {list.map((r, i) => (
+            <div
+              key={i}
+              className="grid gap-2 items-center rounded-xl bg-panel2 border border-line px-2.5 py-2
+                         [grid-template-columns:24px_minmax(64px,1fr)_minmax(0,66px)_minmax(0,86px)_82px]"
+            >
+              <span className="text-center font-mono text-[13px] text-accent">{i + 1}</span>
+              <span className="text-sm truncate">{exMap[r.exerciseId]?.name || '—'}</span>
+              <input
+                value={r.targetSets ?? ''}
+                onChange={(e) => mutate((next) => { next[i].targetSets = e.target.value; })}
+                inputMode="numeric"
+                className="w-full min-w-0 bg-ink border border-line rounded-lg px-2 py-1.5 text-center
+                           font-mono text-[13px] focus:outline-none focus:border-accent"
+              />
+              <input
+                value={r.targetReps ?? ''}
+                onChange={(e) => mutate((next) => { next[i].targetReps = e.target.value; })}
+                className="w-full min-w-0 bg-ink border border-line rounded-lg px-2 py-1.5 text-center
+                           font-mono text-[13px] focus:outline-none focus:border-accent"
+              />
+              <div className="flex gap-1 justify-end">
+                {[['↑', -1], ['↓', 1]].map(([glyph, dir]) => (
+                  <button
+                    key={glyph}
+                    onClick={() => move(i, dir)}
+                    className="w-6 h-6 rounded-md border border-line text-muted text-xs
+                               hover:text-accent hover:border-accent/45"
+                  >
+                    {glyph}
+                  </button>
+                ))}
+                <button
+                  onClick={() => mutate((next) => next.splice(i, 1))}
+                  className="w-6 h-6 rounded-md border border-line text-muted text-xs
+                             hover:text-danger hover:border-danger/50"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="flex flex-wrap gap-2.5 items-end mt-5 pt-5 border-t border-line">
+        <div className="flex-1 basis-52 min-w-0">
+          <Select label="Ejercicio" value={exId} onChange={(e) => setExId(e.target.value)}>
             <option value="">Elegir…</option>
             {exercises.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
-          </select>
-        </label>
-        <div className="w-16">
-          <span className="block text-xs uppercase tracking-wider text-muted mb-1.5 font-body">Series</span>
-          <input type="number" value={sets} onChange={(e) => setSets(e.target.value)}
-                 className="w-full bg-panel2 border border-line rounded-lg px-2 py-2.5 text-chalk font-mono text-center focus:outline-none focus:border-volt/60" />
+          </Select>
         </div>
         <div className="w-20">
-          <span className="block text-xs uppercase tracking-wider text-muted mb-1.5 font-body">Reps</span>
-          <input value={reps} onChange={(e) => setReps(e.target.value)}
-                 className="w-full bg-panel2 border border-line rounded-lg px-2 py-2.5 text-chalk font-mono text-center focus:outline-none focus:border-volt/60" />
+          <Input label="Series" value={sets} onChange={(e) => setSets(e.target.value)} inputMode="numeric" className="text-center font-mono" />
         </div>
-        <Button variant="ghost" onClick={addRow}>＋</Button>
+        <div className="w-24">
+          <Input label="Reps" value={reps} onChange={(e) => setReps(e.target.value)} className="text-center font-mono" />
+        </div>
+        <Button variant="ghost" onClick={addRow}>Añadir</Button>
       </div>
-
-      <Button onClick={save} disabled={saving} className="w-full">Guardar día</Button>
-    </div>
+    </Card>
   );
 }

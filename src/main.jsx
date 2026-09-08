@@ -9,18 +9,15 @@ import Days from './pages/Days';
 import LogSession from './pages/LogSession';
 import History from './pages/History';
 import Records from './pages/Records';
-import Nav from './components/Nav';
+import Shell from './components/Shell';
 
 function Protected() {
   const { user } = useAuth();
   if (!user) return <Navigate to="/login" replace />;
   return (
-    <div className="min-h-screen flex flex-col max-w-md mx-auto">
-      <div className="flex-1 pb-24">
-        <Outlet />
-      </div>
-      <Nav />
-    </div>
+    <Shell>
+      <Outlet />
+    </Shell>
   );
 }
 

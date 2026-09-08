@@ -44,8 +44,8 @@ export default function Shell({ children }) {
   const keyboardInset = useKeyboardInset();
 
   return (
-    <div className="min-h-screen flex">
-      <aside className="hidden sm:flex sticky top-0 h-screen shrink-0 flex-col gap-1 border-r border-line
+    <div className="min-h-dvh flex">
+      <aside className="hidden sm:flex sticky top-0 h-dvh shrink-0 flex-col gap-1 border-r border-line
                         bg-panel px-3 py-5 w-[68px] lg:w-56 transition-[width]">
         <div className="flex items-center gap-2.5 px-2 pb-5">
           <span className="w-[26px] h-[26px] shrink-0 rounded-[7px] bg-accent" />

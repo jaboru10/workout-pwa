@@ -11,6 +11,19 @@ import History from './pages/History';
 import Records from './pages/Records';
 import Shell from './components/Shell';
 
+// El service worker de la PWA activa versiones nuevas en segundo plano
+// (skipWaiting + clientsClaim), pero una pestaña ya abierta se queda
+// ejecutando el JS viejo hasta que recarga: forzamos una única recarga en
+// cuanto el nuevo SW toma el control, para no quedarnos con UI desactualizada.
+if ('serviceWorker' in navigator) {
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (reloaded) return;
+    reloaded = true;
+    window.location.reload();
+  });
+}
+
 function Protected() {
   const { user } = useAuth();
   if (!user) return <Navigate to="/login" replace />;

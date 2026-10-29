@@ -61,15 +61,7 @@ export default function Settings() {
 
         <Card className="p-4 flex flex-col">
           <SectionTitle>Durante el entrenamiento</SectionTitle>
-          <Toggle checked={cfg.autoRest} onChange={(v) => store.updateConfig({ autoRest: v })} label="Descanso automático" hint="Arranca el temporizador al marcar una serie." />
-          <Toggle checked={cfg.sound} onChange={(v) => store.updateConfig({ sound: v })} label="Pitido al acabar el descanso" />
-          <Toggle checked={cfg.vibrate} onChange={(v) => store.updateConfig({ vibrate: v })} label="Vibración" hint="Solo en Android; el iPhone no deja vibrar a las webs." />
           <Toggle checked={cfg.keepAwake} onChange={(v) => store.updateConfig({ keepAwake: v })} label="Pantalla siempre encendida" hint="Mientras haya una sesión abierta." />
-          <div className="mt-2">
-            <Input label="Descanso por defecto (segundos)" inputMode="numeric" value={String(cfg.defaultRestSec)}
-              onChange={(e) => store.updateConfig({ defaultRestSec: Number(e.target.value.replace(/\D/g, '')) || 0 })}
-              hint="Se usa cuando el ejercicio no tiene descanso ni rol." />
-          </div>
         </Card>
 
         <Card className="p-4 flex flex-col gap-2">

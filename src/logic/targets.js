@@ -63,6 +63,5 @@ export function targetLine(target, config) {
   const parts = [];
   if (target.sets) parts.push(`${target.sets} × ${reps.label || '—'}`);
   if (rir) parts.push(`RIR ${rir.label}`);
-  parts.push(fmtRest(restFor(target, config)));
   return parts.join(' · ');
 }

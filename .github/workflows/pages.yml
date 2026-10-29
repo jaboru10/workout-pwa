@@ -1,0 +1,54 @@
+name: Publicar en GitHub Pages
+
+# Cada push a master publica la app en https://jaboru10.github.io/workout-pwa/
+# (rama gh-pages). La primera vez puede hacer falta activar Pages en
+# Settings → Pages → Source: «Deploy from a branch» → gh-pages / (root).
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - name: Compilar para /workout-pwa/
+        run: npm run build
+        env:
+          VITE_BASE: /workout-pwa/
+      - name: Preparar para Pages
+        run: |
+          # Cualquier ruta desconocida carga la app (que la redirige a /#/…)
+          cp dist/index.html dist/404.html
+          touch dist/.nojekyll
+      - name: Publicar en la rama gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
+          publish_branch: gh-pages
+          force_orphan: true
+          commit_message: "deploy: ${{ github.sha }}"
+      - name: Intentar activar Pages (si aún no lo está)
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api "repos/${{ github.repository }}/pages" >/dev/null 2>&1 && { echo "Pages ya activo"; exit 0; }
+          gh api -X POST "repos/${{ github.repository }}/pages" -f "source[branch]=gh-pages" -f "source[path]=/" \
+            && echo "Pages activado" || echo "::warning::Activa Pages a mano: Settings → Pages → Deploy from a branch → gh-pages"

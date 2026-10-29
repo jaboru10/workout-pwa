@@ -54,8 +54,9 @@ check('Botón Empezar en Hoy', await startBtn.isVisible());
 // Empezar el día de pecho (desde Entrenar → elegir día)
 await page.getByRole('button', { name: 'Otro día' }).click();
 await page.getByRole('button', { name: /Pecho \+ abdominales/ }).click();
-await page.getByText('En curso').waitFor();
+await page.getByText('Ejercicio 1 de 5').waitFor();
 await shot('sesion-pecho-inicio');
+check('Una pantalla por ejercicio', (await page.getByRole('heading', { level: 2 }).count()) === 1);
 
 // Sin peso la serie no se puede marcar (evita series vacías por un toque sin querer)
 check('Sin peso no deja marcar la serie', await page.getByRole('button', { name: 'Escribe el peso' }).isVisible());
@@ -68,39 +69,41 @@ await reps.fill('10');
 await page.getByRole('button', { name: '1', exact: true }).first().click();
 await shot('serie1-rellena');
 await page.getByRole('button', { name: /✓ Hecha/ }).click();
-await page.getByText('Descanso').waitFor();
-await shot('descanso');
-check('Descanso automático tras marcar serie', await page.getByText('Descanso').isVisible());
-await page.getByRole('button', { name: 'Saltar' }).click();
+await page.getByText('Serie 2 de 3').waitFor();
+await shot('serie2');
+check('Sin temporizador de descanso', (await page.getByText('Descanso').count()) === 0 && (await page.getByRole('button', { name: 'Saltar' }).count()) === 0);
 
 // Serie 2: hereda 30 kg (plan) → solo reps
 await page.getByLabel('Repeticiones').first().fill('9');
 await page.getByRole('button', { name: /✓ Hecha/ }).click();
-await page.getByRole('button', { name: 'Saltar' }).click();
 // Serie 3 aceptando el plan (peso heredado) con reps tecleadas
 await page.getByLabel('Repeticiones').first().fill('8');
 await page.getByRole('button', { name: /✓ Hecha/ }).click();
-await page.getByRole('button', { name: 'Saltar' }).click();
-await page.waitForTimeout(300);
-await shot('ejercicio1-hecho');
+// Ejercicio acabado → pasa solo al siguiente
+await page.getByText('Ejercicio 2 de 5').waitFor();
+check('Pasa solo al siguiente ejercicio', await page.getByRole('heading', { name: 'Press inclinado con mancuernas' }).isVisible());
+await shot('ejercicio2');
 
 // Persistencia: recargar a mitad de sesión
 await page.reload();
-await page.getByText('En curso').waitFor();
-const prog = await page.locator('header').getByText(/\d+\/\d+/).first().innerText();
-check('La sesión sobrevive a recargar', prog.startsWith('3/'), prog);
+await page.getByText('Ejercicio 2 de 5').waitFor();
+check('La sesión sobrevive a recargar', true);
 
 // Rellenar rápido el resto de series de trabajo aceptando el plan con reps.
-for (let i = 0; i < 30; i++) {
+for (let i = 0; i < 60; i++) {
   const pending = page.getByRole('button', { name: /✓ Hecha|Escribe el peso|Escribe las reps/ });
-  if (!(await pending.count())) break;
+  if (!(await pending.count())) {
+    await page.waitForTimeout(700); // paso automático al siguiente ejercicio
+    if (await pending.count()) continue;
+    const next = page.getByRole('button', { name: 'Siguiente →' });
+    if (await next.count()) { await next.click(); continue; }
+    break;
+  }
   const r = page.getByLabel('Repeticiones').first();
   if (!(await r.inputValue()) && !(await r.getAttribute('placeholder'))) await r.fill('10');
   const w = page.getByLabel('Peso en kilos').first();
   if (!(await w.inputValue()) && !(await w.getAttribute('placeholder'))) await w.fill('20');
   await page.getByRole('button', { name: /✓ Hecha/ }).click();
-  const skip = page.getByRole('button', { name: 'Saltar' });
-  if (await skip.count()) await skip.click();
 }
 await shot('pecho-completo');
 await page.getByRole('button', { name: /Terminar ✓/ }).click();
@@ -114,7 +117,7 @@ check('Resumen tras guardar', true);
 // Segunda sesión del mismo día → la sugerencia debe subir el press plano (10/9/8 no llega a 12 → mantener)
 await page.goto(`${BASE}#/entrenar`);
 await page.getByRole('button', { name: /Pecho \+ abdominales/ }).click();
-await page.getByText('En curso').waitFor();
+await page.getByText('Ejercicio 1 de 5').waitFor();
 const sugg = await page.getByText(/Mantén|Sube a/).first().innerText();
 check('Sugerencia de progresión basada en la última vez', /Mantén 30 kg/.test(sugg), sugg);
 await shot('sugerencia');
@@ -127,13 +130,20 @@ await page.waitForURL(/#\/$/);
 // Día de hombro: biserie + superserie
 await page.goto(`${BASE}#/entrenar`);
 await page.getByRole('button', { name: /^Jueves.*Hombro/ }).click();
-await page.getByText('En curso').waitFor();
-// Ir a la biserie (segundo ejercicio): abrir su tarjeta
+await page.getByText('Ejercicio 1 de 5').waitFor();
+// Ir a la biserie desde la lista de ejercicios
+await page.getByRole('button', { name: 'Ver ejercicios' }).click();
+await shot('lista-ejercicios');
 await page.getByRole('button', { name: /Elevaciones laterales con mancuernas/ }).click();
-await page.getByRole('button', { name: /^1\s/ }).first().click().catch(() => {});
+await page.getByText('Ejercicio 2 de 5').waitFor();
 await shot('hombro-biserie');
 const dropRows = await page.getByText('↘').count();
 check('La biserie crea filas drop', dropRows >= 1, `${dropRows} drops visibles`);
+await page.getByRole('button', { name: 'Ver ejercicios' }).click();
+await page.getByRole('button', { name: /Encogimientos \+ Pájaros/ }).click();
+await page.getByText('Ejercicio 5 de 5').waitFor();
+check('La superserie se ve en una sola pantalla', (await page.getByRole('heading', { level: 2 }).count()) === 2);
+await shot('superserie');
 
 // Una URL de la versión anterior (sin almohadilla) sigue funcionando
 await page.goto(`${BASE}history`);

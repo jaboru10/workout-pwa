@@ -9,7 +9,6 @@ import {
 } from '../components/ui';
 import { PageBody, PageHeader } from '../components/Shell';
 import ExercisePicker from '../components/ExercisePicker';
-import { fmtRest, restFor } from '../logic/targets';
 import { unlockAudio } from '../hooks/device';
 
 export default function Routine() {
@@ -290,7 +289,7 @@ export function DayEditor() {
                   {ex?.name || 'Ejercicio eliminado'}
                 </p>
                 <p className="font-mono text-xs text-muted mt-1">
-                  {de.sets}×{de.reps || '—'}{de.rir != null && de.rir !== '' ? ` · RIR ${de.rir}` : ''} · {fmtRest(restFor(de, state.config))}
+                  {de.sets}×{de.reps || '—'}{de.rir != null && de.rir !== '' ? ` · RIR ${de.rir}` : ''}
                   {de.role ? ` · ${ROLES[de.role]}` : ''}{de.technique === 'biserie' ? ' · biserie' : ''}
                 </p>
                 {de.notes && <p className="text-xs text-muted/80 mt-1 line-clamp-2">{de.notes}</p>}
@@ -360,7 +359,6 @@ function DayExerciseSheet({ open, de, exercise, onClose, onSave, onRemove }) {
           <Input label="Series" inputMode="numeric" value={String(d.sets ?? '')} onChange={(e) => set({ sets: e.target.value.replace(/\D/g, '') })} />
           <Input label="Reps" value={d.reps ?? ''} onChange={(e) => set({ reps: e.target.value })} hint="5-8 · 10 · 15+15 · máx" />
           <Input label="RIR objetivo" value={d.rir ?? ''} onChange={(e) => set({ rir: e.target.value })} hint="0 · 1-2" />
-          <Input label="Descanso (s)" inputMode="numeric" value={String(d.restSec ?? '')} onChange={(e) => set({ restSec: e.target.value.replace(/\D/g, '') })} hint="Vacío = según rol" />
         </div>
         <div>
           <Label>Rol</Label>

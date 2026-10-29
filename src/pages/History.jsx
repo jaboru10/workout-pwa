@@ -1,100 +1,105 @@
-import { useEffect, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api } from '../api/client';
-import { Card, EmptyState } from '../components/ui';
-import { formatDate, isWithinEditWindow } from '../utils/dates';
+import * as store from '../data/store';
+import { byId, doneSessions, useAppState } from '../data/store';
+import { normName } from '../data/schema';
+import { Badge, Button, Card, EmptyState, Input, Loading } from '../components/ui';
+import { PageBody, PageHeader } from '../components/Shell';
+import { formatDate, parseLocalDate } from '../utils/dates';
+import { durationMin, formatVolume, sessionSets, sessionVolume, short, plural } from '../logic/metrics';
 
 export default function History() {
+  const state = useAppState();
   const navigate = useNavigate();
-  const [sessions, setSessions] = useState([]);
-  const [exercises, setExercises] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [q, setQ] = useState('');
   const [open, setOpen] = useState(null);
+  const exMap = useMemo(() => byId(state.exercises), [state.exercises]);
+  const sessions = useMemo(() => doneSessions(state), [state]);
 
-  useEffect(() => {
-    Promise.all([api.listSessions(), api.listExercises()])
-      .then(([s, e]) => { setSessions(s); setExercises(e); })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
+  const filtered = useMemo(() => {
+    const term = normName(q);
+    if (!term) return sessions;
+    return sessions.filter((s) => {
+      const names = (s.exercises || []).map((x) => exMap[x.exerciseId]?.name || '').join(' ');
+      return normName(`${s.date} ${s.dayName || ''} ${s.routineName || ''} ${names} ${s.notes || ''}`).includes(term);
+    });
+  }, [sessions, q, exMap]);
 
-  const exMap = Object.fromEntries(exercises.map((e) => [e.id, e]));
+  const groups = useMemo(() => {
+    const out = [];
+    filtered.forEach((s) => {
+      const d = parseLocalDate(s.date);
+      const key = d ? `${d.getFullYear()}-${d.getMonth()}` : 'x';
+      const label = d ? d.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }) : 'Sin fecha';
+      if (!out.length || out[out.length - 1].key !== key) out.push({ key, label, items: [] });
+      out[out.length - 1].items.push(s);
+    });
+    return out;
+  }, [filtered]);
 
-  async function del(id, e) {
-    e.stopPropagation();
-    if (!confirm('¿Borrar esta sesión? Los récords se recalcularán.')) return;
-    await api.deleteSession(id);
-    setSessions(sessions.filter((s) => s.id !== id));
+  if (!state.ready) return <PageBody><Loading /></PageBody>;
+
+  function del(s) {
+    if (!confirm(`¿Borrar la sesión del ${formatDate(s.date)}? No se puede deshacer.`)) return;
+    store.deleteSession(s.id);
   }
 
-  if (loading) return <div className="px-5 pt-8"><p className="text-muted font-body">Cargando…</p></div>;
-
   return (
-    <div className="px-5 pt-8">
-      <h1 className="font-display text-4xl font-bold uppercase tracking-tight mb-5">Historial</h1>
-
-      {sessions.length === 0 ? (
-        <EmptyState title="Sin historial" hint="Cuando registres sesiones aparecerán aquí." />
-      ) : (
-        <div className="space-y-2">
-          {sessions.map((s) => (
-            <Card key={s.id} className="overflow-hidden">
-              <div className="p-4 flex items-center justify-between cursor-pointer"
-                   onClick={() => setOpen(open === s.id ? null : s.id)}>
-                <div>
-                  <p className="font-display text-xl uppercase tracking-wide">
-                    {formatDate(s.date)}
-                  </p>
-                  <p className="text-muted text-sm font-body">
-                    {s.exercises?.length || 0} ejercicios
-                    {s.routineName && ` · ${s.routineName}`}
-                    {s.badDay && ' · día flojo'}
-                  </p>
-                </div>
-                <div className="flex items-center gap-3">
-                  {/* Solo las sesiones dentro de la ventana de 7 días son editables (IL-003) */}
-                  {isWithinEditWindow(s.date) && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); navigate(`/log/${s.id}`); }}
-                      className="text-volt/80 hover:text-volt text-sm font-body"
-                    >
-                      Editar
-                    </button>
-                  )}
-                  <button onClick={(e) => del(s.id, e)} className="text-blood/60 hover:text-blood text-sm font-body">
-                    Borrar
+    <>
+      <PageHeader crumb={plural(sessions.length, 'sesión', 'sesiones')} title="Historial" />
+      <PageBody className="flex flex-col gap-3 max-w-3xl">
+        <Input placeholder="Buscar ejercicio, día, fecha…" value={q} onChange={(e) => setQ(e.target.value)} />
+        {sessions.length === 0 ? (
+          <EmptyState title="Sin historial" hint="Cuando termines tu primera sesión aparecerá aquí." action={<Button onClick={() => navigate('/entrenar')}>Entrenar</Button>} />
+        ) : filtered.length === 0 ? (
+          <EmptyState title="Sin resultados" hint="Prueba con otro término." />
+        ) : groups.map((g) => (
+          <div key={g.key} className="flex flex-col gap-2.5">
+            <p className="font-display text-[11px] uppercase tracking-[0.16em] text-muted mt-2 first-letter:uppercase">{g.label}</p>
+            {g.items.map((s) => {
+              const isOpen = open === s.id;
+              return (
+                <Card key={s.id} className={isOpen ? 'border-accent/40' : ''}>
+                  <button type="button" onClick={() => setOpen(isOpen ? null : s.id)} className="w-full flex items-center gap-3 px-4 min-h-[64px] text-left">
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[15px] font-semibold truncate">{s.dayName}</span>
+                      <span className="block text-xs text-muted">
+                        {formatDate(s.date, { weekday: 'short', day: 'numeric', month: 'short' })}
+                        {durationMin(s) ? ` · ${durationMin(s)} min` : ''}
+                      </span>
+                    </span>
+                    {s.badDay && <Badge tone="danger">flojo</Badge>}
+                    <span className="font-mono text-xs text-muted text-right shrink-0">{sessionSets(s)} series<br />{formatVolume(sessionVolume(s))}</span>
+                    <span className="text-muted text-xs w-3">{isOpen ? '▲' : '▼'}</span>
                   </button>
-                  <span className="text-muted">{open === s.id ? '▲' : '▼'}</span>
-                </div>
-              </div>
-
-              {open === s.id && (
-                <div className="px-4 pb-4 border-t border-line pt-3 space-y-3">
-                  {[...(s.exercises || [])].sort((a, b) => a.order - b.order).map((ex, i) => (
-                    <div key={i}>
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-volt font-mono text-sm">{ex.order}</span>
-                        <span className="font-body font-medium text-sm">{exMap[ex.exerciseId]?.name || '—'}</span>
-                        {ex.movedFromDayId && <span className="text-muted text-[10px] font-body">movido</span>}
-                      </div>
-                      <div className="flex flex-wrap gap-1.5 pl-6">
-                        {ex.sets.map((set, si) => (
-                          <span key={si} className="font-mono text-xs bg-panel2 rounded px-2 py-1 text-muted">
-                            {set.weight}×{set.reps}
-                          </span>
-                        ))}
+                  {isOpen && (
+                    <div className="border-t border-line px-4 py-3 flex flex-col gap-3">
+                      {s.exercises.map((x) => (
+                        <div key={x.id}>
+                          <p className="text-sm font-medium">{x.order}. {exMap[x.exerciseId]?.name || '—'}</p>
+                          <div className="flex flex-wrap gap-1.5 mt-1">
+                            {x.sets.map((st) => (
+                              <span key={st.id} className={`font-mono text-[12px] border rounded-md px-1.5 py-0.5 ${st.type === 'warmup' ? 'border-line text-muted/70' : st.type === 'drop' ? 'border-accent/30 text-accent' : 'border-line text-muted'}`}>
+                                {st.type === 'warmup' ? 'A ' : st.type === 'drop' ? '↘' : ''}{short(st.weight)}×{st.reps}{st.rir != null ? `@${st.rir}` : ''}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                      {s.notes && <p className="text-sm text-muted italic">{s.notes}</p>}
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="ghost" className="flex-1" onClick={() => navigate(`/resumen/${s.id}`)}>Resumen</Button>
+                        <Button size="sm" variant="ghost" className="flex-1" onClick={() => navigate(`/entrenar/${s.id}`)}>Editar</Button>
+                        <Button size="sm" variant="danger" className="flex-1" onClick={() => del(s)}>Borrar</Button>
                       </div>
                     </div>
-                  ))}
-                  {s.generalNotes && (
-                    <p className="text-muted text-sm font-body italic pt-2">{s.generalNotes}</p>
                   )}
-                </div>
-              )}
-            </Card>
-          ))}
-        </div>
-      )}
-    </div>
+                </Card>
+              );
+            })}
+          </div>
+        ))}
+      </PageBody>
+    </>
   );
 }

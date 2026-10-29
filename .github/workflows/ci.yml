@@ -1,0 +1,41 @@
+name: CI
+
+# Compila, pasa las pruebas de lógica y la prueba E2E en un móvil simulado
+# (Chrome de Android y Chrome de iPhone). Las capturas quedan como artefacto.
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Pruebas de lógica (progresión, superseries, biseries, récords)
+        run: npm test
+      - name: Compilar
+        run: npm run build
+      - name: Instalar Playwright (solo para la prueba E2E)
+        run: |
+          npm i --no-save playwright@1.63.0
+          npx playwright install --with-deps chromium
+      - name: Prueba E2E en móvil
+        run: |
+          npx vite preview --port 4173 --strictPort &
+          for i in $(seq 30); do curl -sf http://localhost:4173/ >/dev/null && break; sleep 1; done
+          SHOTS=shots/android node e2e/smoke.mjs
+          DEVICE=iphone SHOTS=shots/iphone node e2e/smoke.mjs
+      - name: Guardar capturas
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: capturas-movil
+          path: shots/
+          if-no-files-found: ignore

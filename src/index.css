@@ -8,25 +8,26 @@ html, body, #root { height: 100%; }
 
 body {
   margin: 0;
-  background: #0a0a0b;
-  color: #f2f2ef;
-  font-family: Inter, sans-serif;
+  background: #12151c;
+  color: #eef0f5;
+  font-family: Archivo, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
-  /* safe areas para iPhone con notch en modo standalone */
-  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
-/* Scrollbar discreta */
-::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-thumb { background: #2a2a2e; border-radius: 4px; }
+/* Sin spinners en los números: el peso se ajusta con teclado y con los pasos. */
+input[type=number]::-webkit-outer-spin-button,
+input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+input[type=number] { -moz-appearance: textfield; }
+
+/* Chrome: scrollbar fina que no roba ancho al contenido. */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #2b3140; border-radius: 6px; border: 2px solid #12151c; }
+::-webkit-scrollbar-thumb:hover { background: #3a4254; }
+
+/* El foco se ve siempre: la entrada de series se navega con teclado. */
+:focus-visible { outline: 2px solid #a97bff; outline-offset: 1px; }
 
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
 }
-
-@keyframes ignite {
-  0%   { box-shadow: 0 0 0 0 rgba(215,255,62,0.0); }
-  40%  { box-shadow: 0 0 0 3px rgba(215,255,62,0.35); }
-  100% { box-shadow: 0 0 0 0 rgba(215,255,62,0.0); }
-}
-.animate-ignite { animation: ignite 1.2s ease-out; }
